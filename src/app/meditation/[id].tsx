@@ -1,30 +1,102 @@
-import {Pressable, Text, View,} from 'react-native'
-import {router, useLocalSearchParams} from "expo-router";
-import {meditations} from "@/data";
+import React, { useEffect, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from "expo-router";
+import { meditations } from "@/data";
 import AntDesign from '@expo/vector-icons/AntDesign';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import Slider from '@react-native-community/slider';
-import {SafeAreaView} from 'react-native-safe-area-context';
-
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
+import audioFile from '@assets/meditations/audio.mp3';
 
 export default function MeditationDetails() {
-    const { id } = useLocalSearchParams<{ id: string}>();
+    const { id } = useLocalSearchParams<{ id: string }>();
     const meditation = meditations.find((m) => m.id === Number(id));
 
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [position, setPosition] = useState(0);
+    const [duration, setDuration] = useState(0);
+
+    // Helper function to format the duration
+    const formatTime = (milliseconds: number) => {
+        const minutes = Math.floor(milliseconds / 60000);
+        const seconds = Math.floor((milliseconds % 60000) / 1000);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    // Sound playback control
+    const playAudio = async () => {
+        try {
+            if (!sound) {
+                const { sound: newSound } = await Audio.Sound.createAsync(audioFile, {}, (status) => {
+                    if (status.isLoaded) {
+                        setPosition(status.positionMillis || 0);
+                        setDuration(status.durationMillis || 0);
+                    }
+                });
+                setSound(newSound);
+                await newSound.playAsync();
+                setIsPlaying(true);
+            } else {
+                if (isPlaying) {
+                    await sound.pauseAsync();
+                    setIsPlaying(false);
+                } else {
+                    await sound.playAsync();
+                    setIsPlaying(true);
+                }
+            }
+        } catch (error) {
+            console.error("Audio oynatma hatası:", error);
+        }
+    };
+
+    // Slider control: Adjust the position when the user scrolls
+    const handleSlidingComplete = async (value: number) => {
+        if (sound) {
+            const newPosition = value * duration;
+            await sound.setPositionAsync(newPosition);
+            setPosition(newPosition);
+        }
+    };
+
+    // Sound status is constantly checked (position and duration are updated)
+    useEffect(() => {
+        let interval: NodeJS.Timeout | null = null;
+        if (sound && isPlaying) {
+            interval = setInterval(async () => {
+                const status = await sound.getStatusAsync();
+                if (status.isLoaded) {
+                    setPosition(status.positionMillis || 0);
+                    setDuration(status.durationMillis || 0);
+                }
+            }, 1000); // Update every 1 second
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [sound, isPlaying]);
+
+    // Release the audio source when the component is unmounted
+    useEffect(() => {
+        return () => {
+            if (sound) {
+                sound.unloadAsync();
+            }
+        };
+    }, [sound]);
 
     if (!meditation) {
         return <Text>{`No meditation found`}</Text>;
     }
 
     return (
-
         <SafeAreaView className="bg-orange-400 flex-1 p-2 justify-between">
-            {/* Page Content */}
             <View className="flex-1">
-                {/*Header */}
+                {/* Header */}
                 <View className="flex-1">
                     <View className="flex-row items-center justify-between p-10">
                         <AntDesign name="infocirlceo" size={24} color="black" />
@@ -43,10 +115,16 @@ export default function MeditationDetails() {
                     </Text>
                 </View>
 
-                {/* Play/Pause Button*/}
-
-                <Pressable className="bg-zinc-800 self-center w-20 aspect-square items-center justify-center rounded-full">
-                    <FontAwesome6 name="play" size={24} color="snow" />
+                {/* Play/Pause Button */}
+                <Pressable
+                    onPress={playAudio}
+                    className="bg-zinc-800 self-center w-20 aspect-square items-center justify-center rounded-full"
+                >
+                    <FontAwesome6
+                        name={isPlaying ? "pause" : "play"}
+                        size={24}
+                        color="snow"
+                    />
                 </Pressable>
 
                 {/* Bottom part of the screen */}
@@ -57,12 +135,12 @@ export default function MeditationDetails() {
                             <MaterialIcons name="airplay" size={24} color="#3A3937" />
                             <MaterialCommunityIcons name="cog-outline" size={24} color="#3A3937" />
                         </View>
-                        {/* Playback Indicator*/}
+                        {/* Playback Indicator */}
                         <View>
                             <Slider
-                                style={{width: '100%', height: 40}}
-                                value={0.5}
-                                onSlidingComplete={(value) => console.log(value)}
+                                style={{ width: '100%', height: 40 }}
+                                value={duration ? position / duration : 0}
+                                onSlidingComplete={handleSlidingComplete}
                                 minimumValue={0}
                                 maximumValue={1}
                                 minimumTrackTintColor="#3A3937"
@@ -71,8 +149,8 @@ export default function MeditationDetails() {
                             />
                         </View>
                         <View className="flex-row justify-between">
-                           <Text>03:24</Text>
-                           <Text>13:14</Text>
+                            <Text>{formatTime(position)}</Text>
+                            <Text>{formatTime(duration)}</Text>
                         </View>
                     </View>
                 </View>
