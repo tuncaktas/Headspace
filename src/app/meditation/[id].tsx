@@ -10,6 +10,8 @@ import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import audioFile from '@assets/meditations/audio.mp3';
+import AnimatedBackground from "@/components/AnimatedBackground";
+
 
 export default function MeditationDetails() {
     const { id } = useLocalSearchParams<{ id: string }>();
@@ -95,6 +97,7 @@ export default function MeditationDetails() {
 
     return (
         <SafeAreaView className="bg-orange-400 flex-1 p-2 justify-between">
+            <AnimatedBackground />
             <View className="flex-1">
                 {/* Header */}
                 <View className="flex-1">
